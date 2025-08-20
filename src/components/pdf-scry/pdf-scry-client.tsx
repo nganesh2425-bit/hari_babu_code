@@ -12,6 +12,7 @@ import {
   Download,
   X,
   File as FileIcon,
+  Leaf,
 } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
 
@@ -22,7 +23,7 @@ import { Table as UiTable, TableBody, TableCell, TableHead, TableHeader, TableRo
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { summarizePdf } from '@/ai/flows/summarize-pdf';
+import { summarizePdf, type SummarizePdfOutput } from '@/ai/flows/summarize-pdf';
 import { cn } from '@/lib/utils';
 
 // pdf.js worker configuration
@@ -37,12 +38,14 @@ type ExtractedContent = {
   images: string[];
 };
 
+type AnalysisResult = SummarizePdfOutput;
+
 export function PdfScryClient() {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [extractedContent, setExtractedContent] = useState<ExtractedContent | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [summary, setSummary] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const { toast } = useToast();
   
   const parsePdf = async (file: File): Promise<ExtractedContent> => {
@@ -103,7 +106,7 @@ export function PdfScryClient() {
       setFile(selectedFile);
       setIsLoading(true);
       setExtractedContent(null);
-      setSummary(null);
+      setAnalysisResult(null);
 
       try {
         const content = await parsePdf(selectedFile);
@@ -112,18 +115,18 @@ export function PdfScryClient() {
         if (content.text) {
           try {
             const result = await summarizePdf({ text: content.text });
-            setSummary(result.summary);
+            setAnalysisResult(result);
           } catch (error) {
-            console.error('Summarization failed:', error);
+            console.error('Analysis failed:', error);
             toast({
               variant: 'destructive',
-              title: 'AI Summarization Failed',
-              description: 'Could not generate a summary for the document.',
+              title: 'AI Analysis Failed',
+              description: 'Could not analyze the document.',
             });
-            setSummary('Could not generate summary.');
+            setAnalysisResult({ summary: 'Could not generate summary.', advisories: [] });
           }
         } else {
-          setSummary('No text found in PDF to summarize.');
+            setAnalysisResult({ summary: 'No text found in PDF to analyze.', advisories: [] });
         }
 
       } catch(e) {
@@ -176,32 +179,11 @@ export function PdfScryClient() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadImage = async (imageUrl: string, index: number) => {
-    try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `image_${index + 1}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Download Error',
-        description: 'Could not download the image.',
-      });
-    }
-  };
-
   const handleReset = () => {
     setFile(null);
     setExtractedContent(null);
     setIsLoading(false);
-    setSummary(null);
+    setAnalysisResult(null);
   };
   
   const renderContent = () => {
@@ -218,11 +200,11 @@ export function PdfScryClient() {
     if (extractedContent) {
       return (
         <Tabs defaultValue="summary" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-4">
+          <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 mb-4">
             <TabsTrigger value="summary"><FileText className="mr-2" />Summary</TabsTrigger>
+            <TabsTrigger value="advisory"><Leaf className="mr-2" />Agromet Advisory</TabsTrigger>
             <TabsTrigger value="text"><FileText className="mr-2" />Full Text</TabsTrigger>
             <TabsTrigger value="paragraphs"><Pilcrow className="mr-2" />Paragraphs</TabsTrigger>
-            <TabsTrigger value="tables" disabled><Table className="mr-2" />Tables</TabsTrigger>
             <TabsTrigger value="images" disabled><ImageIcon className="mr-2" />Images</TabsTrigger>
           </TabsList>
 
@@ -232,8 +214,8 @@ export function PdfScryClient() {
                 <CardTitle>AI-Powered Summary</CardTitle>
               </CardHeader>
               <CardContent>
-                {summary ? (
-                  <p className="text-muted-foreground leading-relaxed">{summary}</p>
+                {analysisResult?.summary ? (
+                  <p className="text-muted-foreground leading-relaxed">{analysisResult.summary}</p>
                 ) : (
                   <div className="space-y-2">
                     <Skeleton className="h-4 w-full" />
@@ -245,6 +227,38 @@ export function PdfScryClient() {
             </Card>
           </TabsContent>
           
+          <TabsContent value="advisory">
+            <Card>
+              <CardHeader>
+                <CardTitle>Agromet Advisory</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {analysisResult?.advisories && analysisResult.advisories.length > 0 ? (
+                   <UiTable>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[150px]">Crop Name</TableHead>
+                        <TableHead className="w-[150px]">Crop Stage</TableHead>
+                        <TableHead>Advisory</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {analysisResult.advisories.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{item.cropName}</TableCell>
+                          <TableCell>{item.cropStage}</TableCell>
+                          <TableCell>{item.advisory}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </UiTable>
+                ) : (
+                   <p className="text-muted-foreground">No agromet advisories found in this document.</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="text">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -313,7 +327,7 @@ export function PdfScryClient() {
               <div className="flex items-center justify-center flex-col gap-4 text-muted-foreground py-10">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
                 <p className="font-medium">Analyzing your document...</p>
-                <p className="text-sm">Extracting text, tables, and images.</p>
+                <p className="text-sm">Extracting text and key information.</p>
               </div>
             )}
             {renderContent()}

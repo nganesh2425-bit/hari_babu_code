@@ -13,6 +13,7 @@ import {
   X,
   File as FileIcon,
 } from 'lucide-react';
+import * as pdfjs from 'pdfjs-dist';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -24,37 +25,16 @@ import { useToast } from '@/hooks/use-toast';
 import { summarizePdf } from '@/ai/flows/summarize-pdf';
 import { cn } from '@/lib/utils';
 
+// pdf.js worker configuration
+if (typeof window !== 'undefined') {
+  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+}
+
 type ExtractedContent = {
   text: string;
   paragraphs: string[];
   tables: string[][][];
   images: string[];
-};
-
-const DUMMY_CONTENT: ExtractedContent = {
-  text: `PDF Scry: An Overview. This document outlines the core functionalities of the PDF Scry application. It is designed to extract text, tables, and images from PDF documents efficiently. Key features include AI-powered summarization, which provides users with a concise overview of the document's content.
-
-Section 1: Text Extraction. The application parses through the PDF to identify and extract all textual content. This includes paragraphs, headings, and lists. The extracted text is then made available for download as a plain text file.
-
-Section 2: Table Recognition. PDF Scry can detect and extract tabular data. The tables are presented in a structured format, preserving rows and columns. This feature is particularly useful for data analysis and reporting.
-
-Section 3: Image Parsing. All images embedded within the PDF are extracted and displayed. Users have the option to download individual images or all images at once. This is ideal for presentations and reports where visual content is important.`,
-  paragraphs: [
-    "PDF Scry: An Overview. This document outlines the core functionalities of the PDF Scry application. It is designed to extract text, tables, and images from PDF documents efficiently. Key features include AI-powered summarization, which provides users with a concise overview of the document's content.",
-    "Section 1: Text Extraction. The application parses through the PDF to identify and extract all textual content. This includes paragraphs, headings, and lists. The extracted text is then made available for download as a plain text file.",
-    "Section 2: Table Recognition. PDF Scry can detect and extract tabular data. The tables are presented in a structured format, preserving rows and columns. This feature is particularly useful for data analysis and reporting.",
-    "Section 3: Image Parsing. All images embedded within the PDF are extracted and displayed. Users have the option to download individual images or all images at once. This is ideal for presentations and reports where visual content is important.",
-  ],
-  tables: [
-    [
-      ["Feature", "Description", "Status"],
-      ["Text Extraction", "Extracts all text content", "Implemented"],
-      ["Table Recognition", "Extracts tables", "Implemented"],
-      ["Image Parsing", "Extracts images", "Implemented"],
-      ["AI Summarization", "Generates content summary", "Implemented"],
-    ],
-  ],
-  images: ["https://placehold.co/600x400.png", "https://placehold.co/400x300.png"],
 };
 
 export function PdfScryClient() {
@@ -64,6 +44,49 @@ export function PdfScryClient() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [summary, setSummary] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  const parsePdf = async (file: File): Promise<ExtractedContent> => {
+    const fileReader = new FileReader();
+    return new Promise((resolve, reject) => {
+      fileReader.onload = async (event) => {
+        const typedArray = new Uint8Array(event.target?.result as ArrayBuffer);
+        const pdf = await pdfjs.getDocument(typedArray).promise;
+        let fullText = '';
+        const paragraphs: string[] = [];
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          
+          let pageText = '';
+          let lastY: number | null = null;
+          let paragraphBuffer = '';
+
+          textContent.items.forEach((item: any) => {
+            pageText += item.str + ' ';
+            if (lastY !== null && item.transform[5] < lastY) {
+               if(paragraphBuffer.trim()) paragraphs.push(paragraphBuffer.trim());
+               paragraphBuffer = '';
+            }
+            paragraphBuffer += item.str + ' ';
+            lastY = item.transform[5];
+          });
+          if(paragraphBuffer.trim()) paragraphs.push(paragraphBuffer.trim());
+
+          fullText += pageText + '\n\n';
+        }
+        
+        resolve({
+          text: fullText.trim(),
+          paragraphs: paragraphs.filter(p => p.length > 20),
+          tables: [], // Table extraction is complex and would need a more advanced solution
+          images: [], // Image extraction is also complex
+        });
+      };
+      fileReader.onerror = reject;
+      fileReader.readAsArrayBuffer(file);
+    });
+  };
 
   const handleFileSelect = useCallback(
     async (selectedFile: File | null) => {
@@ -82,26 +105,36 @@ export function PdfScryClient() {
       setExtractedContent(null);
       setSummary(null);
 
-      // Simulate PDF parsing
-      setTimeout(async () => {
-        const content = DUMMY_CONTENT;
+      try {
+        const content = await parsePdf(selectedFile);
         setExtractedContent(content);
-        setIsLoading(false);
-        
-        try {
-          const result = await summarizePdf({ text: content.text });
-          setSummary(result.summary);
-        } catch (error) {
-          console.error('Summarization failed:', error);
-          toast({
-            variant: 'destructive',
-            title: 'AI Summarization Failed',
-            description: 'Could not generate a summary for the document.',
-          });
-          setSummary('Could not generate summary.');
+
+        if (content.text) {
+          try {
+            const result = await summarizePdf({ text: content.text });
+            setSummary(result.summary);
+          } catch (error) {
+            console.error('Summarization failed:', error);
+            toast({
+              variant: 'destructive',
+              title: 'AI Summarization Failed',
+              description: 'Could not generate a summary for the document.',
+            });
+            setSummary('Could not generate summary.');
+          }
+        } else {
+          setSummary('No text found in PDF to summarize.');
         }
 
-      }, 1500);
+      } catch(e) {
+         toast({
+          variant: 'destructive',
+          title: 'PDF Parsing Error',
+          description: 'Could not extract content from the PDF.',
+        });
+      } finally {
+        setIsLoading(false);
+      }
     },
     [toast]
   );
@@ -189,8 +222,8 @@ export function PdfScryClient() {
             <TabsTrigger value="summary"><FileText className="mr-2" />Summary</TabsTrigger>
             <TabsTrigger value="text"><FileText className="mr-2" />Full Text</TabsTrigger>
             <TabsTrigger value="paragraphs"><Pilcrow className="mr-2" />Paragraphs</TabsTrigger>
-            <TabsTrigger value="tables"><Table className="mr-2" />Tables</TabsTrigger>
-            <TabsTrigger value="images"><ImageIcon className="mr-2" />Images</TabsTrigger>
+            <TabsTrigger value="tables" disabled><Table className="mr-2" />Tables</TabsTrigger>
+            <TabsTrigger value="images" disabled><ImageIcon className="mr-2" />Images</TabsTrigger>
           </TabsList>
 
           <TabsContent value="summary">
@@ -235,52 +268,6 @@ export function PdfScryClient() {
                     <p className="text-sm text-secondary-foreground">{p}</p>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="tables">
-            <Card>
-              <CardHeader><CardTitle>Extracted Tables</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
-                {extractedContent.tables.map((table, i) => (
-                  <div key={i} className="rounded-md border">
-                  <UiTable>
-                    <TableHeader>
-                      <TableRow>
-                        {table[0].map((header, j) => <TableHead key={j}>{header}</TableHead>)}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {table.slice(1).map((row, k) => (
-                        <TableRow key={k}>
-                          {row.map((cell, l) => <TableCell key={l}>{cell}</TableCell>)}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </UiTable>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="images">
-            <Card>
-              <CardHeader><CardTitle>Extracted Images</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {extractedContent.images.map((img, i) => (
-                    <Card key={i} className="overflow-hidden group">
-                      <CardContent className="p-0 relative">
-                        <Image src={img} alt={`Extracted image ${i+1}`} width={600} height={400} className="w-full h-auto object-cover" data-ai-hint="document diagram" />
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button onClick={() => handleDownloadImage(img, i)}><Download className="mr-2 h-4 w-4" />Download</Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
               </CardContent>
             </Card>
           </TabsContent>

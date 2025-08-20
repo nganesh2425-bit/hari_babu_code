@@ -168,11 +168,38 @@ export function PdfScryClient() {
   
   const handleDownloadText = () => {
     if (!extractedContent) return;
-    const blob = new Blob([extractedContent.text], { type: 'text/plain' });
+    const blob = new Blob([extractedContent.text], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${file?.name.replace('.pdf', '')}_text.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadCsv = () => {
+    if (!analysisResult?.advisories || analysisResult.advisories.length === 0) return;
+
+    const headers = ['Crop Name', 'Crop Stage', 'Advisory'];
+    const csvRows = [
+      headers.join(','),
+      ...analysisResult.advisories.map(row => 
+        [
+          `"${row.cropName.replace(/"/g, '""')}"`,
+          `"${row.cropStage.replace(/"/g, '""')}"`,
+          `"${row.advisory.replace(/"/g, '""')}"`
+        ].join(',')
+      )
+    ];
+    
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${file?.name.replace('.pdf', '')}_advisories.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -229,8 +256,11 @@ export function PdfScryClient() {
           
           <TabsContent value="advisory">
             <Card>
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Agromet Advisory</CardTitle>
+                 {analysisResult?.advisories && analysisResult.advisories.length > 0 && (
+                  <Button onClick={handleDownloadCsv}><Download className="mr-2 h-4 w-4" />Download CSV</Button>
+                )}
               </CardHeader>
               <CardContent>
                 {analysisResult?.advisories && analysisResult.advisories.length > 0 ? (

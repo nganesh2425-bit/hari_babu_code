@@ -198,14 +198,19 @@ export function PdfScryClient() {
         filename = `${file?.name.replace('.pdf', '')}_advisories.csv`;
     } else {
         if (!analysisResult?.weatherData || analysisResult.weatherData.length === 0) return;
-        headers = ['District', 'Max Temp', 'Min Temp', 'Rainfall', 'Relative Humidity'];
+        headers = ['District', 'Date', 'Rainfall (mm)', 'T-MAX (C)', 'T-MIN (C)', 'Cloud Cover', 'RH Max (%)', 'RH Min (%)', 'Wind Speed (kmph)', 'Wind Direction (deg)'];
         data = analysisResult.weatherData.map(row => 
             [
                 `"${row.district.replace(/"/g, '""')}"`,
+                `"${row.date.replace(/"/g, '""')}"`,
+                `"${row.rainfall.replace(/"/g, '""')}"`,
                 `"${row.maxTemp.replace(/"/g, '""')}"`,
                 `"${row.minTemp.replace(/"/g, '""')}"`,
-                `"${row.rainfall.replace(/"/g, '""')}"`,
-                `"${row.relativeHumidity.replace(/"/g, '""')}"`
+                `"${row.cloudCover.replace(/"/g, '""')}"`,
+                `"${row.rhMax.replace(/"/g, '""')}"`,
+                `"${row.rhMin.replace(/"/g, '""')}"`,
+                `"${row.windSpeed.replace(/"/g, '""')}"`,
+                `"${row.windDirection.replace(/"/g, '""')}"`
             ].join(',')
         );
         filename = `${file?.name.replace('.pdf', '')}_weather.csv`;
@@ -322,28 +327,41 @@ export function PdfScryClient() {
               </CardHeader>
               <CardContent>
                 {analysisResult?.weatherData && analysisResult.weatherData.length > 0 ? (
+                  <ScrollArea className="w-full whitespace-nowrap">
                    <UiTable>
                     <TableHeader>
                       <TableRow>
                         <TableHead>District</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Rainfall</TableHead>
                         <TableHead>Max Temp</TableHead>
                         <TableHead>Min Temp</TableHead>
-                        <TableHead>Rainfall</TableHead>
-                        <TableHead>Rel. Humidity</TableHead>
+                        <TableHead>Cloud Cover</TableHead>
+                        <TableHead>RH Max</TableHead>
+                        <TableHead>RH Min</TableHead>
+                        <TableHead>Wind Speed</TableHead>
+                        <TableHead>Wind Dir.</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {analysisResult.weatherData.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">{item.district}</TableCell>
+                          <TableCell>{item.date}</TableCell>
+                          <TableCell>{item.rainfall}</TableCell>
                           <TableCell>{item.maxTemp}</TableCell>
                           <TableCell>{item.minTemp}</TableCell>
-                          <TableCell>{item.rainfall}</TableCell>
-                          <TableCell>{item.relativeHumidity}</TableCell>
+                          <TableCell>{item.cloudCover}</TableCell>
+                          <TableCell>{item.rhMax}</TableCell>
+                          <TableCell>{item.rhMin}</TableCell>
+                          <TableCell>{item.windSpeed}</TableCell>
+                          <TableCell>{item.windDirection}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </UiTable>
+                  <div className="h-4"></div>
+                  </ScrollArea>
                 ) : (
                    <p className="text-muted-foreground">No weather data found in this document.</p>
                 )}

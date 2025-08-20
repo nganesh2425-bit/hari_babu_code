@@ -26,10 +26,15 @@ const AdvisorySchema = z.object({
 
 const WeatherDataSchema = z.object({
     district: z.string().describe('The name of the district.'),
+    date: z.string().describe('The date of the weather forecast.'),
     maxTemp: z.string().describe('Maximum temperature value, including units (e.g., "38.2°C").'),
     minTemp: z.string().describe('Minimum temperature value, including units (e.g., "25.5°C").'),
     rainfall: z.string().describe('Rainfall amount, including units (e.g., "5 mm").'),
-    relativeHumidity: z.string().describe('Relative humidity percentage, including units (e.g., "80-90%").'),
+    cloudCover: z.string().describe('Cloud cover description (e.g., "Partly cloudy").'),
+    rhMax: z.string().describe('Maximum relative humidity percentage, including units (e.g., "90%").'),
+    rhMin: z.string().describe('Minimum relative humidity percentage, including units (e.g., "80%").'),
+    windSpeed: z.string().describe('Wind speed, including units (e.g., "10 kmph").'),
+    windDirection: z.string().describe('Wind direction, including units or degrees (e.g., "NE" or "45 deg").'),
 });
 
 const SummarizePdfOutputSchema = z.object({
@@ -55,7 +60,7 @@ const prompt = ai.definePrompt({
 
   Next, look for any agromet advisory information. For each crop mentioned, extract the 'crop name', its 'crop stage', and the specific 'Agromet Advisory' text associated with it. Structure this into a list of advisories.
 
-  Then, look for any weather data tables or summaries. For each district or location, extract the 'District', 'Max Temp' (Maximum Temperature), 'Min Temp' (Minimum Temperature), 'Rainfall', and 'Relative Humidity'. Include units in the values.
+  Then, look for any weather data tables or summaries. For each district or location, extract the 'District', 'Date', 'Rainfall', 'T-MAX' (Maximum Temperature), 'T-MIN' (Minimum Temperature), 'Cloud Cover', 'Rh Max' (Maximum Relative Humidity), 'Rh Min' (Minimum Relative Humidity), 'Wind speed', and 'Wind Direction'. Include units in the values.
 
   If no agromet advisories are found, return an empty array for the 'advisories' field.
   If no weather data is found, return an empty array for the 'weatherData' field.

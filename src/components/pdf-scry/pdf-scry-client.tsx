@@ -13,6 +13,7 @@ import {
   X,
   File as FileIcon,
   Leaf,
+  CloudSun,
 } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
 
@@ -123,10 +124,10 @@ export function PdfScryClient() {
               title: 'AI Analysis Failed',
               description: 'Could not analyze the document.',
             });
-            setAnalysisResult({ summary: 'Could not generate summary.', advisories: [] });
+            setAnalysisResult({ summary: 'Could not generate summary.', advisories: [], weatherData: [] });
           }
         } else {
-            setAnalysisResult({ summary: 'No text found in PDF to analyze.', advisories: [] });
+            setAnalysisResult({ summary: 'No text found in PDF to analyze.', advisories: [], weatherData: [] });
         }
 
       } catch(e) {
@@ -179,19 +180,40 @@ export function PdfScryClient() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadCsv = () => {
-    if (!analysisResult?.advisories || analysisResult.advisories.length === 0) return;
+  const handleDownloadCsv = (type: 'advisory' | 'weather') => {
+    let data;
+    let headers: string[];
+    let filename: string;
 
-    const headers = ['Crop Name', 'Crop Stage', 'Advisory'];
+    if (type === 'advisory') {
+        if (!analysisResult?.advisories || analysisResult.advisories.length === 0) return;
+        headers = ['Crop Name', 'Crop Stage', 'Advisory'];
+        data = analysisResult.advisories.map(row => 
+            [
+                `"${row.cropName.replace(/"/g, '""')}"`,
+                `"${row.cropStage.replace(/"/g, '""')}"`,
+                `"${row.advisory.replace(/"/g, '""')}"`
+            ].join(',')
+        );
+        filename = `${file?.name.replace('.pdf', '')}_advisories.csv`;
+    } else {
+        if (!analysisResult?.weatherData || analysisResult.weatherData.length === 0) return;
+        headers = ['District', 'Max Temp', 'Min Temp', 'Rainfall', 'Relative Humidity'];
+        data = analysisResult.weatherData.map(row => 
+            [
+                `"${row.district.replace(/"/g, '""')}"`,
+                `"${row.maxTemp.replace(/"/g, '""')}"`,
+                `"${row.minTemp.replace(/"/g, '""')}"`,
+                `"${row.rainfall.replace(/"/g, '""')}"`,
+                `"${row.relativeHumidity.replace(/"/g, '""')}"`
+            ].join(',')
+        );
+        filename = `${file?.name.replace('.pdf', '')}_weather.csv`;
+    }
+
     const csvRows = [
       headers.join(','),
-      ...analysisResult.advisories.map(row => 
-        [
-          `"${row.cropName.replace(/"/g, '""')}"`,
-          `"${row.cropStage.replace(/"/g, '""')}"`,
-          `"${row.advisory.replace(/"/g, '""')}"`
-        ].join(',')
-      )
+      ...data
     ];
     
     const csvContent = csvRows.join('\n');
@@ -199,7 +221,7 @@ export function PdfScryClient() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${file?.name.replace('.pdf', '')}_advisories.csv`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -227,9 +249,10 @@ export function PdfScryClient() {
     if (extractedContent) {
       return (
         <Tabs defaultValue="summary" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 mb-4">
+          <TabsList className="grid w-full grid-cols-4 md:grid-cols-6 mb-4">
             <TabsTrigger value="summary"><FileText className="mr-2" />Summary</TabsTrigger>
-            <TabsTrigger value="advisory"><Leaf className="mr-2" />Agromet Advisory</TabsTrigger>
+            <TabsTrigger value="advisory"><Leaf className="mr-2" />Advisory</TabsTrigger>
+            <TabsTrigger value="weather"><CloudSun className="mr-2" />Weather</TabsTrigger>
             <TabsTrigger value="text"><FileText className="mr-2" />Full Text</TabsTrigger>
             <TabsTrigger value="paragraphs"><Pilcrow className="mr-2" />Paragraphs</TabsTrigger>
             <TabsTrigger value="images" disabled><ImageIcon className="mr-2" />Images</TabsTrigger>
@@ -259,7 +282,7 @@ export function PdfScryClient() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Agromet Advisory</CardTitle>
                  {analysisResult?.advisories && analysisResult.advisories.length > 0 && (
-                  <Button onClick={handleDownloadCsv}><Download className="mr-2 h-4 w-4" />Download CSV</Button>
+                  <Button onClick={() => handleDownloadCsv('advisory')}><Download className="mr-2 h-4 w-4" />Download CSV</Button>
                 )}
               </CardHeader>
               <CardContent>
@@ -284,6 +307,45 @@ export function PdfScryClient() {
                   </UiTable>
                 ) : (
                    <p className="text-muted-foreground">No agromet advisories found in this document.</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="weather">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Weather Data</CardTitle>
+                 {analysisResult?.weatherData && analysisResult.weatherData.length > 0 && (
+                  <Button onClick={() => handleDownloadCsv('weather')}><Download className="mr-2 h-4 w-4" />Download CSV</Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {analysisResult?.weatherData && analysisResult.weatherData.length > 0 ? (
+                   <UiTable>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>District</TableHead>
+                        <TableHead>Max Temp</TableHead>
+                        <TableHead>Min Temp</TableHead>
+                        <TableHead>Rainfall</TableHead>
+                        <TableHead>Rel. Humidity</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {analysisResult.weatherData.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{item.district}</TableCell>
+                          <TableCell>{item.maxTemp}</TableCell>
+                          <TableCell>{item.minTemp}</TableCell>
+                          <TableCell>{item.rainfall}</TableCell>
+                          <TableCell>{item.relativeHumidity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </UiTable>
+                ) : (
+                   <p className="text-muted-foreground">No weather data found in this document.</p>
                 )}
               </CardContent>
             </Card>

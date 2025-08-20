@@ -18,12 +18,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-        config.resolve.alias['pdfjs-dist'] = 'pdfjs-dist/legacy/build/pdf.mjs';
-    }
-    return config;
-  },
 };
 
 export default nextConfig;

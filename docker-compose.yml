@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  nextjs-app:
+    build: .
+    container_name: nextjs-app
+    ports:
+      - "9002:9002"
+    environment:
+      NODE_ENV: production
+      PORT: 9002
+    restart: unless-stopped
